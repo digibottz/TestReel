@@ -7,6 +7,95 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+  <body class="dark">
+  <div id="feed"></div>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #000;
+      color: #fff;
+      overflow-x: hidden;
+    }
+
+    #feed {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      scroll-behavior: smooth;
+    }
+
+    .post {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      height: 90vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+      box-sizing: border-box;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .post-text {
+      font-size: 1.4rem;
+      line-height: 1.6;
+      padding: 10px;
+    }
+
+    /* User info bottom-left */
+    .user-info {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .user-info img {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 2px solid white;
+      object-fit: cover;
+    }
+
+    .user-info .username {
+      font-weight: bold;
+    }
+
+    /* Action icons on right side */
+    .actions {
+      position: absolute;
+      right: 20px;
+      bottom: 100px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 25px;
+    }
+
+    .actions button {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 1.4rem;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .actions button:hover {
+      transform: scale(1.2);
+      color: #1da1f2;
+    }
+  </style>
+</body>
+
   <!-- Loading -->
   <div id="loading" class="loading">Loading...</div>
 
@@ -53,3 +142,54 @@
   <script src="app.js"></script>
 </body>
 </html>
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "YOUR_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_BUCKET",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const feed = document.getElementById("feed");
+
+async function loadPosts() {
+  const q = query(collection(db, "posts"), orderBy("timestamp", "desc"));
+  const snapshot = await getDocs(q);
+  feed.innerHTML = "";
+
+  snapshot.forEach(doc => {
+    const data = doc.data();
+    const post = document.createElement("div");
+    post.classList.add("post");
+    post.innerHTML = `
+      <div class="post-text">${data.text || ""}</div>
+
+      <div class="user-info">
+        <img src="${data.profilePic || 'https://i.imgur.com/8Km9tLL.png'}" alt="profile">
+        <div>
+          <div class="username">${data.name || "Anonymous"}</div>
+          <div class="userid">@${data.userId || "user1234"}</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="like">❤️<br><small>${data.likes || 0}</small></button>
+        <button class="comment">💬<br><small>${data.comments || 0}</small></button>
+        <button class="share">🔁</button>
+        <button class="repost">🔄</button>
+      </div>
+    `;
+    feed.appendChild(post);
+  });
+}
+
+loadPosts();
+
