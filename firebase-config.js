@@ -4,7 +4,8 @@ const firebaseConfig = {
   projectId: "textreelsapp",
   storageBucket: "textreelsapp.firebasestorage.app",
   messagingSenderId: "659142869313",
-  appId: "1:659142869313:web:69c2edebdf391c24aee1c0"
+  appId: "1:659142869313:web:69c2edebdf391c24aee1c0",
+  measurementId: "G-WVWYEJ3SND"
 };
 
 // Initialize Firebase
