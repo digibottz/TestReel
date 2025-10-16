@@ -1,10 +1,10 @@
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyAmB-r-RgOsD9kj7hc0Xz4Pvjcqp2c1KuY",
+  authDomain: "textreelsapp.firebaseapp.com",
+  projectId: "textreelsapp",
+  storageBucket: "textreelsapp.firebasestorage.app",
+  messagingSenderId: "659142869313",
+  appId: "1:659142869313:web:69c2edebdf391c24aee1c0"
 };
 
 // Initialize Firebase
