@@ -1,99 +1,90 @@
+const feed = document.getElementById('feed');
 let lastVisible = null;
-let isLoading = false;
+let loadingPosts = false;
 
-// Load Posts
-function loadPosts(limit){
-  if(isLoading) return;
-  isLoading = true; showLoading(true);
+async function loadPosts(initial = false) {
+  if (loadingPosts) return;
+  loadingPosts = true;
 
-  let query = db.collection('posts').orderBy('createdAt','desc').limit(limit);
-  if(lastVisible) query = query.startAfter(lastVisible);
+  let queryRef = db.collection('posts').orderBy('createdAt', 'desc').limit(5);
+  if (!initial && lastVisible) queryRef = queryRef.startAfter(lastVisible);
 
-  query.get().then(snapshot=>{
-    if(!snapshot.empty){
-      lastVisible = snapshot.docs[snapshot.docs.length-1];
-      snapshot.docs.forEach(doc=>{
-        renderPost(doc.data(), doc.id);
-      });
-    }
-    showLoading(false);
-    isLoading=false;
-  }).catch(err=>{
-    showToast(err.message);
-    isLoading=false;
-    showLoading(false);
+  const snapshot = await queryRef.get();
+  lastVisible = snapshot.docs[snapshot.docs.length - 1];
+  renderPosts(snapshot.docs);
+  loadingPosts = false;
+}
+
+function renderPosts(docs) {
+  docs.forEach(doc => {
+    const data = doc.data();
+    const div = document.createElement('div');
+    div.className = 'post';
+    div.innerHTML = `
+      <div class="username" data-uid="${data.userId}">@${data.userId.slice(0,6)}</div>
+      <div class="text">${data.text}</div>
+      <div class="actions">
+        <button class="likeBtn" data-id="${doc.id}">❤️ ${data.likeCount || 0}</button>
+        <button class="commentBtn" data-id="${doc.id}">💬</button>
+        <button class="repostBtn" data-id="${doc.id}">🔁 ${data.repostCount || 0}</button>
+      </div>
+    `;
+    feed.appendChild(div);
   });
 }
 
-// Render Post
-function renderPost(post, postId){
-  const feed = document.getElementById('feed');
-  const postDiv = document.createElement('div');
-  postDiv.className = 'post';
-  postDiv.innerHTML = `
-    <h3>${post.userId}</h3>
-    <p>${post.content}</p>
-    <div class="post-actions">
-      <button onclick="likePost('${postId}')">❤️ ${post.likes||0}</button>
-      <button onclick="openComments('${postId}')">💬 ${post.commentsCount||0}</button>
-      <button onclick="repost('${postId}')">🔁 ${post.reposts||0}</button>
-    </div>
-  `;
-  feed.appendChild(postDiv);
-}
-
-// Like Post
-function likePost(postId){
-  db.collection('posts').doc(postId)
-    .update({ likes: firebase.firestore.FieldValue.increment(1) });
-}
-
-// Repost
-function repost(postId){
-  db.collection('posts').doc(postId)
-    .update({ reposts: firebase.firestore.FieldValue.increment(1) });
-}
-
-// Scroll to load next posts
-window.addEventListener('scroll',()=>{
-  if((window.innerHeight+window.scrollY)>=document.body.offsetHeight-50){
-    loadPosts(10);
+// Infinite scroll
+feed.addEventListener('scroll', () => {
+  if (feed.scrollTop + feed.clientHeight >= feed.scrollHeight - 50) {
+    loadPosts();
   }
 });
 
-// Add New Post
-document.getElementById('addPostBtn').addEventListener('click',()=>{
-  const content = prompt('Enter your post:');
-  if(!content) return;
+// Post creation
+document.getElementById('addPostBtn').addEventListener('click', async () => {
+  const text = prompt('Enter post text:');
+  if (!text) return;
+  const user = auth.currentUser;
+  if (!user) return showToast('Please sign in first!');
+  await db.collection('posts').add({
+    text,
+    userId: user.uid,
+    likeCount: 0,
+    repostCount: 0,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  showToast('Posted!');
+  feed.innerHTML = '';
+  loadPosts(true);
+});
 
-  if(!currentUser){
-    showToast("Sign in first");
-    return;
+// Actions
+feed.addEventListener('click', async (e) => {
+  const user = auth.currentUser;
+  if (!user) return showToast('Sign in to interact!');
+
+  const postId = e.target.dataset.id;
+  if (e.target.classList.contains('likeBtn')) {
+    const likeRef = db.collection('likes').doc(`${postId}_${user.uid}`);
+    const docSnap = await likeRef.get();
+    if (docSnap.exists) return showToast('Already liked!');
+    await likeRef.set({ postId, userId: user.uid });
+    await db.collection('posts').doc(postId).update({ likeCount: firebase.firestore.FieldValue.increment(1) });
+    e.target.classList.add('liked');
+    e.target.textContent = '❤️ ' + (parseInt(e.target.textContent.split(' ')[1]) + 1);
   }
 
-  // Daily post limit check
-  const userRef = db.collection('users').doc(currentUser.uid);
-  userRef.get().then(doc=>{
-    const data = doc.data();
-    const today = new Date().toDateString();
-    let dailyCount = data.lastPostDate === today ? data.dailyPostCount : 0;
-    if(dailyCount>=5){ // Example limit
-      showToast("Daily post limit reached");
-      return;
-    }
-    // Create Post
-    db.collection('posts').add({
-      userId: currentUser.uid,
-      content,
-      type: 'Public',
-      likes:0, shares:0, commentsCount:0, reposts:0,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).then(()=>{
-      userRef.update({
-        dailyPostCount: dailyCount+1,
-        lastPostDate: today
-      });
-      showToast("Post Added");
-    });
-  });
+  if (e.target.classList.contains('commentBtn')) {
+    openComments(postId);
+  }
+
+  if (e.target.classList.contains('repostBtn')) {
+    if (user.isAnonymous) return showToast('Login required to repost!');
+    await db.collection('posts').doc(postId).update({ repostCount: firebase.firestore.FieldValue.increment(1) });
+    e.target.textContent = '🔁 ' + (parseInt(e.target.textContent.split(' ')[1]) + 1);
+  }
+
+  if (e.target.classList.contains('username')) {
+    openProfile(e.target.dataset.uid);
+  }
 });
