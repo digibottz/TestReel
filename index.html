@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Text Reels</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Loading Indicator -->
+  <div id="loading" class="loading">Loading...</div>
+
+  <!-- Toast Message -->
+  <div id="toast" class="toast"></div>
+
+  <!-- Header -->
+  <header class="header">
+    <h1>Text Reels</h1>
+    <button id="signInBtn">Sign In</button>
+    <button id="signUpBtn">Sign Up</button>
+    <button id="signOutBtn" style="display:none;">Sign Out</button>
+  </header>
+
+  <!-- Feed Container -->
+  <div id="feed" class="feed"></div>
+
+  <!-- Add New Post Button -->
+  <button id="addPostBtn" class="add-post-btn">+</button>
+
+  <!-- Comment Modal -->
+  <div id="commentModal" class="comment-modal">
+    <div class="comment-header">
+      <h3>Comments</h3>
+      <button id="closeCommentModal">X</button>
+    </div>
+    <div id="commentsContainer"></div>
+    <textarea id="newComment" placeholder="Add a comment..."></textarea>
+    <button id="submitComment">Post</button>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-auth-compat.js"></script>
+
+  <!-- App Scripts -->
+  <script src="firebase-config.js"></script>
+  <script src="utils.js"></script>
+  <script src="auth.js"></script>
+  <script src="posts.js"></script>
+  <script src="comments.js"></script>
+  <script src="profile.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
