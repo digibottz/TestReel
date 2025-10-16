@@ -1,55 +1,264 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Text Reels</title>
-  <link rel="stylesheet" href="style.css">
+  <title>Text Reels App</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial; }
+    body {
+      background-color: #000;
+      color: #fff;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #feed {
+      width: 100%;
+      max-width: 600px;
+      height: 100vh;
+      overflow-y: scroll;
+      scroll-snap-type: y mandatory;
+    }
+    .post {
+      scroll-snap-align: start;
+      min-height: 100vh;
+      border-bottom: 1px solid #222;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 20px;
+    }
+    .username {
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+    .text {
+      font-size: 1.3em;
+      line-height: 1.4;
+      flex-grow: 1;
+    }
+    .actions {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 10px;
+    }
+    button {
+      background: none;
+      color: white;
+      border: none;
+      font-size: 1em;
+      cursor: pointer;
+    }
+    button.liked { color: #ff3d3d; }
+    #addPostContainer {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      width: 90%;
+      max-width: 500px;
+    }
+    #postInput {
+      flex-grow: 1;
+      padding: 10px;
+      border: 1px solid #333;
+      border-radius: 8px;
+      background: #111;
+      color: #fff;
+    }
+    #addPostBtn {
+      background: #1a73e8;
+      color: white;
+      border-radius: 8px;
+      padding: 10px 15px;
+    }
+
+    /* Comments modal */
+    #commentsModal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.95);
+      overflow-y: auto;
+      padding: 20px;
+    }
+    #commentsModal.active { display: block; }
+    .comment {
+      border-bottom: 1px solid #333;
+      padding: 10px 0;
+    }
+    #closeComments {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 1.5em;
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
-  <!-- Loading Indicator -->
-  <div id="loading" class="loading">Loading...</div>
+  <div id="feed"></div>
 
-  <!-- Toast Message -->
-  <div id="toast" class="toast"></div>
-
-  <!-- Header -->
-  <header class="header">
-    <h1>Text Reels</h1>
-    <button id="signInBtn">Sign In</button>
-    <button id="signUpBtn">Sign Up</button>
-    <button id="signOutBtn" style="display:none;">Sign Out</button>
-  </header>
-
-  <!-- Feed Container -->
-  <div id="feed" class="feed"></div>
-
-  <!-- Add New Post Button -->
-  <button id="addPostBtn" class="add-post-btn">+</button>
-
-  <!-- Comment Modal -->
-  <div id="commentModal" class="comment-modal">
-    <div class="comment-header">
-      <h3>Comments</h3>
-      <button id="closeCommentModal">X</button>
-    </div>
-    <div id="commentsContainer"></div>
-    <textarea id="newComment" placeholder="Add a comment..."></textarea>
-    <button id="submitComment">Post</button>
+  <div id="addPostContainer">
+    <input id="postInput" placeholder="Write your text..." />
+    <button id="addPostBtn">Post</button>
   </div>
 
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-auth-compat.js"></script>
+  <div id="commentsModal">
+    <span id="closeComments">✕</span>
+    <div id="commentsContainer"></div>
+  </div>
 
-  <!-- App Scripts -->
-  <script src="firebase-config.js"></script>
-  <script src="utils.js"></script>
-  <script src="auth.js"></script>
-  <script src="posts.js"></script>
-  <script src="comments.js"></script>
-  <script src="profile.js"></script>
-  <script src="app.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import {
+      getFirestore, collection, addDoc, getDocs, orderBy, query, serverTimestamp, limit,
+      startAfter, doc, setDoc, getDoc, updateDoc, increment
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    import {
+      getAuth, signInAnonymously, onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+    // 🔥 Your Firebase Config
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      projectId: "YOUR_PROJECT",
+      storageBucket: "YOUR_PROJECT.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    let currentUser = null;
+    let lastVisible = null;
+    const feed = document.getElementById('feed');
+    const addPostBtn = document.getElementById('addPostBtn');
+    const postInput = document.getElementById('postInput');
+
+    // --- Auth (Anonymous or Signed-in)
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) await signInAnonymously(auth);
+      currentUser = user;
+      loadPosts();
+    });
+
+    // --- Add Post
+    addPostBtn.onclick = async () => {
+      const text = postInput.value.trim();
+      if (!text) return alert("Enter text!");
+      await addDoc(collection(db, "posts"), {
+        text,
+        userId: currentUser.uid,
+        createdAt: serverTimestamp(),
+        likeCount: 0,
+        repostCount: 0,
+        visibility: "public"
+      });
+      postInput.value = "";
+      feed.innerHTML = "";
+      loadPosts();
+    };
+
+    // --- Load Posts with infinite scroll
+    async function loadPosts() {
+      const q = query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(5));
+      const snapshot = await getDocs(q);
+      renderPosts(snapshot.docs);
+      lastVisible = snapshot.docs[snapshot.docs.length - 1];
+    }
+
+    async function loadMorePosts() {
+      if (!lastVisible) return;
+      const q = query(collection(db, "posts"), orderBy("createdAt", "desc"), startAfter(lastVisible), limit(5));
+      const snapshot = await getDocs(q);
+      renderPosts(snapshot.docs);
+      if (snapshot.docs.length) lastVisible = snapshot.docs[snapshot.docs.length - 1];
+    }
+
+    feed.onscroll = () => {
+      if (feed.scrollTop + feed.clientHeight >= feed.scrollHeight - 50) loadMorePosts();
+    };
+
+    // --- Render Posts
+    function renderPosts(docs) {
+      docs.forEach(docSnap => {
+        const data = docSnap.data();
+        const div = document.createElement('div');
+        div.className = "post";
+        div.innerHTML = `
+          <div class="username" data-uid="${data.userId}">@${data.userId.slice(0,6)}</div>
+          <div class="text">${data.text}</div>
+          <div class="actions">
+            <button class="likeBtn" data-id="${docSnap.id}">❤️ ${data.likeCount}</button>
+            <button class="commentBtn" data-id="${docSnap.id}">💬</button>
+            <button class="repostBtn" data-id="${docSnap.id}">🔁 ${data.repostCount}</button>
+          </div>
+        `;
+        feed.appendChild(div);
+      });
+    }
+
+    // --- Like Logic (1 per user)
+    feed.addEventListener('click', async (e) => {
+      if (e.target.classList.contains('likeBtn')) {
+        const postId = e.target.dataset.id;
+        const likeRef = doc(db, "likes", `${postId}_${currentUser.uid}`);
+        const likeDoc = await getDoc(likeRef);
+        if (likeDoc.exists()) return alert("You already liked!");
+        await setDoc(likeRef, { postId, userId: currentUser.uid });
+        await updateDoc(doc(db, "posts", postId), { likeCount: increment(1) });
+        e.target.classList.add("liked");
+        e.target.textContent = "❤️ " + (parseInt(e.target.textContent.split(' ')[1]) + 1);
+      }
+
+      // --- Repost
+      if (e.target.classList.contains('repostBtn')) {
+        if (currentUser.isAnonymous) return alert("Login required to repost!");
+        const postId = e.target.dataset.id;
+        await updateDoc(doc(db, "posts", postId), { repostCount: increment(1) });
+        e.target.textContent = "🔁 " + (parseInt(e.target.textContent.split(' ')[1]) + 1);
+      }
+
+      // --- Comments
+      if (e.target.classList.contains('commentBtn')) {
+        openComments(e.target.dataset.id);
+      }
+
+      // --- Username click
+      if (e.target.classList.contains('username')) {
+        const uid = e.target.dataset.uid;
+        alert("Open profile of user: " + uid);
+      }
+    });
+
+    // --- Comments Modal
+    const modal = document.getElementById('commentsModal');
+    const closeComments = document.getElementById('closeComments');
+    const commentsContainer = document.getElementById('commentsContainer');
+
+    async function openComments(postId) {
+      commentsContainer.innerHTML = `<h3>Comments</h3>`;
+      modal.classList.add('active');
+      const q = query(collection(db, "posts", postId, "comments"), orderBy("createdAt", "asc"));
+      const snapshot = await getDocs(q);
+      snapshot.forEach(doc => {
+        const c = document.createElement('div');
+        c.className = "comment";
+        c.textContent = doc.data().text;
+        commentsContainer.appendChild(c);
+      });
+    }
+    closeComments.onclick = () => modal.classList.remove('active');
+  </script>
 </body>
 </html>
